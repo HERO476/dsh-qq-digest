@@ -6,6 +6,8 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -134,9 +136,40 @@ if (lsRemote.ok && lsRemote.out !== '') {
   bad('GitHub 仓库不可达', lsRemote.err.split('\n').slice(0, 2).join(' '));
 }
 
+/**
+ * 猜不出端口就等于误报。这里从 DSH 自己留下的痕迹里取：
+ *  1) QQ_DIGEST_PORT（显式）
+ *  2) ~/.dsh/dsh-process.json 里记录的端口
+ *  3) 几个历史默认端口兜底
+ */
+function detectDshPorts() {
+  const ports = new Set([8784, 1402, 14802]);
+  try {
+    const home = process.env.DSH_HOME && process.env.DSH_HOME.trim() !== ''
+      ? process.env.DSH_HOME.trim()
+      : join(homedir(), '.dsh');
+    const parsed = JSON.parse(readFileSync(join(home, 'dsh-process.json'), 'utf8'));
+    for (const value of [parsed?.port, parsed?.webPort, parsed?.web?.port]) {
+      if (Number.isInteger(value) && value > 0) ports.add(value);
+    }
+  } catch {
+    // 没有就只试兜底端口
+  }
+  return [...ports];
+}
+
 // ── 6. DSH 运行态 ───────────────────────────────────────────────────────
+// DSH 的 Web 端口每次重启都可能变（同一台机器实测过 4845 / 1875 / 4260），
+// 因此优先用显式指定，其次才试历史端口，最后直接问 DSH 的进程信息。
+const explicitPort = process.env.QQ_DIGEST_PORT
+  || (process.argv.find((arg) => arg.startsWith('--port=')) ?? '').split('=')[1]
+  || '';
+const candidatePorts = [
+  ...(explicitPort === '' ? [] : [Number(explicitPort)]),
+  ...detectDshPorts(),
+];
 let base = null;
-for (const port of [4845, 8784, 1402, 14802]) {
+for (const port of candidatePorts) {
   try {
     const res = await fetch(`http://127.0.0.1:${port}/qq-digest-api/state`, {
       headers: { accept: 'application/json' },
@@ -147,7 +180,7 @@ for (const port of [4845, 8784, 1402, 14802]) {
 }
 
 if (base === null) {
-  bad('DSH 里插件没在跑');
+  bad('DSH 里插件没在跑', `试过端口：${candidatePorts.join(', ') || '(无)'}；可用 QQ_DIGEST_PORT=<端口> 指定`);
 } else {
   const state = await (await fetch(`${base}/qq-digest-api/state`, { headers: { accept: 'application/json' } })).json();
   ok('宿主半在线', base);

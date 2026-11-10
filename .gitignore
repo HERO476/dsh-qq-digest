@@ -11,11 +11,14 @@ client-boot.json
 schedule-state.json
 run.lock/
 
+# 本机记忆/索引状态（不进仓库）
+.mnemon/
+
 # 编辑器 / 系统
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
 
-# �༭�������µı���
+# �༭�������µı���
 *.bak*
