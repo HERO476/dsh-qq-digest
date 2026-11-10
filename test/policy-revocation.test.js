@@ -147,3 +147,24 @@ test('句柄格式非法仍然先被拒（不会去问数据源）', async () =>
   assert.equal((await service.getDigest('nope')).status, 'REJECTED');
   assert.equal(listed, 0, '格式非法时不该触发一次数据源调用');
 });
+
+test('status 如实区分「落盘总量」与「当前读得到的量」（换密钥/关策略都要看得出来）', async () => {
+  const { service, setPolicy } = buildService(OPEN);
+
+  const empty = await service.status();
+  assert.equal(empty.digestCount, 0);
+  assert.equal(empty.visibleDigestCount, 0);
+
+  await service.runSummary({ trigger: 'manual' });
+
+  const full = await service.status();
+  assert.equal(full.digestCount, 2);
+  assert.equal(full.visibleDigestCount, 2);
+
+  // 关掉之后：数据还在盘上，但一条也读不到 —— 两个数的差就是这件事的可观测形式
+  setPolicy(ALL_CLOSED);
+  const closed = await service.status();
+  assert.equal(closed.digestCount, 2);
+  assert.equal(closed.visibleDigestCount, 0);
+  assert.equal(closed.secretSource, 'unknown');
+});

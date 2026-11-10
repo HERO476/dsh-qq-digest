@@ -205,9 +205,17 @@ export function createService(options = {}) {
   async function status() {
     let roomCount = null;
     let adapterError = null;
+    // 落盘总量里有多少条「按当前策略 + 当前密钥」真的读得到。
+    // 两个数差得很大通常只有两种原因：策略关掉了这些房间，或者换了句柄密钥
+    // （旧摘要的 roomHandle 是用旧密钥算的，永远匹配不上）。后者必须让人看见，
+    // 否则表现为「升级之后摘要凭空消失」。
+    let visibleDigestCount = null;
     try {
       const rooms = await listRooms();
       roomCount = rooms.allowed.length;
+      const handles = new Set(rooms.allowed.map((room) => room.roomHandle));
+      const rows = typeof store.latestPerRoom === 'function' ? store.latestPerRoom() : dedupeLatest(store.all());
+      visibleDigestCount = rows.filter((row) => handles.has(row.roomHandle)).length;
     } catch (err) {
       adapterError = { code: err?.code ?? 'ADAPTER_ERROR', message: String(err?.message ?? err) };
     }
@@ -220,6 +228,7 @@ export function createService(options = {}) {
       roomCount,
       adapterError,
       digestCount: store.all().length,
+      visibleDigestCount,
       lastRun,
       // 句柄密钥只报「是否设置」与「来源」，绝不报值。
       // 注意：源码里不再有默认常量，因此 secretConfigured 不会再出现「恒真」的假保证。

@@ -213,6 +213,18 @@ node scripts/verify-dsh.mjs      # 宿主半在线？客户端半上次启动有
 - 客户端半：最近一次 `crash-*-web-boot.log` 是否提到本插件；**如果那次 boot 早于 client.js 的修改时间，报 SKIP 而不是通过**（避免用旧日志证明新代码）
 - 落盘：`config.json` 是否存在、`digests.jsonl` 有几条摘要
 
+## 升级注意：0.1.x → 0.2.x 会换句柄密钥
+
+0.1.x 的句柄密钥是源码里的公开常量（`qq-digest-local-dev-secret-…`），任何人拿到它就能离线算出任意房间的
+句柄。0.2.0 起改为 `QQ_DIGEST_SECRET` 或 `<数据目录>/handle-secret`（首次启动随机生成）。
+
+**代价必须说清楚**：旧摘要的 `roomHandle` 是用旧密钥算出来的，换密钥后**匹配不上任何当前句柄**，因此
+- 老摘要仍然在 `digests.jsonl` 里，但读不到（`status.digestCount` 会大于 `status.visibleDigestCount`）；
+- `watermarks.json` 的键（也是旧句柄）同样失效，**下一轮会把所有房间重新摘要一遍**。
+
+这是刻意的取舍：不换密钥，旧句柄就一直可被外部计算出来，撤销语义也就无从谈起。
+若要保留历史摘要，请在升级**之前**用 0.1.x 导出；升级之后只能整份丢弃 `digests.jsonl` 与 `watermarks.json` 重来。
+
 ## 已知限制（不美化）
 
 - **设置页的开关不是安全边界**：`/qq-digest-api` 允许**本机进程**（包括模型通过 bash 起一个 `curl`）直接 POST 改配置。

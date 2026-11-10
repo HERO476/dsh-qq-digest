@@ -150,6 +150,11 @@ check('可以再恢复默认', restore.status === 200 && restore.json.state?.gro
 const run = await request(captured.handler, { method: 'POST', url: '/qq-digest-api/run', body: {} });
 check('POST /run 返回结果', run.status === 200 && typeof run.json.result?.status === 'string', JSON.stringify(run.json.result?.status));
 
+// trigger 由服务端定值：调用方声明 scheduled 必须无效，否则能伪造成「今天定时已跑过」
+const spoofRun = await request(captured.handler, { method: 'POST', url: '/qq-digest-api/run', body: { trigger: 'scheduled' } });
+check('POST /run 的 trigger 不能被伪造成 scheduled', spoofRun.json.result?.trigger === 'manual', JSON.stringify(spoofRun.json.result?.trigger));
+check('schedule-state 记的是 manual', spoofRun.json.state?.scheduleState?.lastTrigger === 'manual', JSON.stringify(spoofRun.json.state?.scheduleState));
+
 const digest = await request(captured.handler, { url: '/qq-digest-api/digest?group=70001111' });
 check('GET /digest 只认群号', digest.status === 200 || digest.json.digest === null, digest.status);
 
