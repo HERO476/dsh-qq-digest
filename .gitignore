@@ -1,0 +1,21 @@
+# 依赖
+node_modules/
+
+# 本地运行时产物（摘要在 ~/.dsh/qq-digest，不该出现在仓库里）
+*.tgz
+*.log
+data/
+digests.jsonl
+watermarks.json
+client-boot.json
+schedule-state.json
+run.lock/
+
+# 编辑器 / 系统
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# �༭�������µı���
+*.bak*

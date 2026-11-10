@@ -1,0 +1,11 @@
+# dsh-qq-digest bundle patch。
+#
+# 只挂**宿主半**：设置页要的 HTTP API（/qq-digest-api）和定时器都在里面。
+# 客户端半不需要在这里登记 —— package.json 的 dsh.client 会被自动加载。
+#
+# MCP 那一行（qq-digest 的四个工具）在 profile 的 cordis.patch.yml 里由
+# `node scripts/install.mjs` 维护，两者互不冲突（row id 不同）。
+
+- insert:
+    - id: qq-digest
+      name: dsh-qq-digest

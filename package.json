@@ -1,0 +1,44 @@
+{
+  "name": "dsh-qq-digest",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "只读的 QQ 群聊摘要插件：设置页里选群、定时跑、产出重点活动与待办；私聊在结构上不可读，零发送能力",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
+    }
+  },
+  "files": [
+    "lib",
+    "src",
+    "install",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "check": "node scripts/check-core-purity.mjs",
+    "verify": "node scripts/check-core-purity.mjs && node --test",
+    "smoke": "node scripts/smoke.mjs",
+    "install:profile": "node scripts/install.mjs"
+  }
+}

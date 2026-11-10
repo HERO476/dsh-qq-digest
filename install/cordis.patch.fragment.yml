@@ -1,0 +1,13 @@
+# === qq-digest MCP BEGIN ===
+# 由 dsh-qq-digest 的 scripts/install.mjs 维护；整段会被替换，请勿手工编辑内部条目。
+- insert:
+    - id: mcp-qq-digest
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: qq-digest
+        transport: stdio
+        command: 'D:\Program Files\nodejs\node.exe'
+        args:
+          - 'D:/Users/30000/AI/dsh-qq-digest/src/run-mcp.mjs'
+        toolCallTimeoutMs: 180000
+# === qq-digest MCP END ===
