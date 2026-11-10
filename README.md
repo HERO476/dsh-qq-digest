@@ -148,15 +148,21 @@ core 纯净性检查锁定：`src/core/` 不许 import `node:fs` / 子进程 / �
 
 ## 安装进 DSH
 
-这一步分两块，互不冲突（row id 不同）：
-
 ```bash
+# 0) （可选）从 npm 拿包，或直接把本仓库放到任意目录
+npm i dsh-qq-digest
+
 # 1) MCP 行：给模型用的四个只读工具
 node scripts/install.mjs --apply
 
 # 2) bundle 行：设置页 + 定时器（宿主半 + 客户端半）
 node scripts/link-profile.mjs --apply
 ```
+
+第 1 步还会把本机 qq-bridge 的位置写进 `<DSH_HOME>/qq-digest/bridge-root.txt`
+（源码里不硬编码任何绝对路径）。如果没自动找到，用 `--bridge-root=D:/path/to/qq-bridge` 指定。
+
+**包内不含任何作者的个人信息**：QQ 号、群号、用户目录都是脱敏后的假值或运行时解析。
 
 第 2 步**不走 pnpm**：本机 profile 的 `node_modules` 里有文件被占用
 （`@img/sharp-win32-x64` 会在 pnpm 重装时报 `ERR_PNPM_EPERM`），所以这里用
