@@ -39,7 +39,7 @@ test('端到端：群被摘要，私聊与频道被拒，且哨兵不外泄', as
   assert.equal(serialized.includes('private:'), false);
   assert.equal(serialized.includes('88880001'), false);
 
-  const all = service.getDigest();
+  const all = await service.getDigest();
   assert.equal(all.status, 'OK');
   assert.equal(all.count, 2);
   const digestText = JSON.stringify(all);
@@ -52,7 +52,7 @@ test('端到端：群被摘要，私聊与频道被拒，且哨兵不外泄', as
 test('摘要结构包含重点活动 / 任务 / 结论三类', async () => {
   const service = buildService();
   await service.runSummary({ trigger: 'manual' });
-  const { items } = service.getDigest();
+  const { items } = await service.getDigest();
   assert.ok(items.length >= 2);
 
   for (const item of items) {
@@ -67,11 +67,11 @@ test('摘要结构包含重点活动 / 任务 / 结论三类', async () => {
   assert.ok(flat.length >= 1, '应该识别出至少一项待办');
 });
 
-test('getDigest 只认 16 位十六进制句柄', () => {
+test('getDigest 只认 16 位十六进制句柄', async () => {
   const service = buildService();
-  assert.equal(service.getDigest('group:123').status, 'REJECTED');
-  assert.equal(service.getDigest('../../etc/passwd').status, 'REJECTED');
-  assert.equal(service.getDigest('0123456789abcdef').status, 'NOT_FOUND');
+  assert.equal((await service.getDigest('group:123')).status, 'REJECTED');
+  assert.equal((await service.getDigest('../../etc/passwd')).status, 'REJECTED');
+  assert.equal((await service.getDigest('0123456789abcdef')).status, 'NOT_FOUND');
 });
 
 test('策略降级（全关）时不产出任何摘要', async () => {
@@ -131,7 +131,7 @@ test('显式打开某条私聊后，它会被摘要（默认态之外的阳性�
   const result = await service.runSummary({ trigger: 'manual' });
   assert.equal(result.summarized.length, 3);
 
-  const all = JSON.stringify(service.getDigest());
+  const all = JSON.stringify(await service.getDigest());
   assert.ok(all.includes(SENTINELS.PRIVATE), '打开后私聊内容才会出现在摘要里');
 });
 
@@ -152,7 +152,7 @@ test('私聊起名后，名字会进摘要的 roomTitle', async () => {
   const named = (result.summarized ?? []).find((item) => item.roomTitle === '老婆');
   assert.ok(named, '摘要条目应带上私聊名字');
 
-  const digest = service.getDigest();
+  const digest = await service.getDigest();
   assert.ok(digest.items.some((item) => item.roomTitle === '老婆'), '落盘的摘要也要带名字');
 });
 

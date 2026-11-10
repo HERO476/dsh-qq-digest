@@ -68,7 +68,12 @@ if (!existsSync(patchFile)) {
 }
 
 const fragment = readFileSync(join(root, 'install', 'cordis.patch.fragment.yml'), 'utf8');
-const block = fragment.replace(/__PACKAGE_ROOT__/g, root.replace(/\\/g, '/')).trimEnd();
+const block = fragment
+  .replace(/__PACKAGE_ROOT__/g, root.replace(/\\/g, '/'))
+  // node 可执行文件必须取当前这台机器上的真实路径：写死任何一台机器的路径，
+  // 换机安装都会 spawn ENOENT，而症状是「工具全部消失、插件却像是装好了」。
+  .replace(/__NODE_EXE__/g, process.execPath.replace(/\\/g, '/'))
+  .trimEnd();
 
 const current = readFileSync(patchFile, 'utf8');
 

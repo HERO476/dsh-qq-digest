@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createGate, REASON, VERDICT, roomHandle } from '../src/core/gate.js';
+import { createGate, REASON, VERDICT, auditRefFor, roomHandle } from '../src/core/gate.js';
 import { defaultPolicy, parsePolicy } from '../src/core/policy.js';
 
 const SECRET = 'test-secret-at-least-sixteen-chars';
@@ -66,10 +66,21 @@ test('被关掉的群拒绝，且原因可区分', () => {
   assert.equal(decision.reason, REASON.GROUP_DISABLED);
 });
 
-test('拒绝也带 auditRef（同一个哈希），便于审计而不写原始 id', () => {
+test('拒绝带 auditRef，但它与读取句柄必须不同域（否则拒绝即发凭据）', () => {
   const decision = gate({ policy, rawId: 'private:88880001' });
-  assert.equal(decision.auditRef, roomHandle(SECRET, 'private:88880001'));
+  assert.match(decision.auditRef, /^[0-9a-f]{16}$/);
+  assert.equal(decision.auditRef, auditRefFor(SECRET, 'private:88880001'));
+  // 核心不变量：拒绝分支绝不返回可用于读取的 roomHandle
+  assert.notEqual(decision.auditRef, roomHandle(SECRET, 'private:88880001'));
+  assert.equal(decision.roomHandle, undefined);
   assert.equal(JSON.stringify(decision).includes('88880001'), false);
+});
+
+test('放行时 roomHandle 与 auditRef 也是两个不同的值', () => {
+  const decision = gate({ policy, rawId: 'group:70001111' });
+  assert.equal(decision.verdict, VERDICT.ALLOW);
+  assert.equal(decision.roomHandle, roomHandle(SECRET, 'group:70001111'));
+  assert.notEqual(decision.auditRef, decision.roomHandle);
 });
 
 test('密钥太短直接拒绝创建闸门', () => {

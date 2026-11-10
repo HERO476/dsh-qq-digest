@@ -1,6 +1,6 @@
 {
   "name": "dsh-qq-digest",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "只读的 DSH QQ 摘要插件：群聊默认全开、私聊默认全关且只能逐条打开；MCP 四个只读工具 + 设置页（选群/起名/定时/立即总结），零发送能力",
   "type": "module",
   "license": "MIT",
@@ -26,7 +26,8 @@
     "mcp"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=20",
+    "dsh": ">=0.2.0-0 <0.3.0"
   },
   "main": "lib/index.js",
   "exports": {

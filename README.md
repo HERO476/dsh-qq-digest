@@ -49,6 +49,9 @@
 
 - `llm`（默认）：OpenAI 兼容接口，结构化 JSON。密钥取 `QQ_DIGEST_LLM_API_KEY` 或 `~/.dsh/.credentials.yaml` 的 `DEEPSEEK_API_KEY`。
   失败**不静默降级**，直接抛 `LLM_*` 错误码。
+  ⚠️ **知情提示**：选 `llm` 意味着被摘要的群/私聊**消息正文、昵称，以及被 @ 的 QQ 号**会发送到
+  模型服务商（默认 `api.deepseek.com`）。不能接受这一点就选 `heuristic`（纯本地规则，不出网）。
+  摘要是对**不可信输入**的加工结果：群成员可以往群名/正文里塞指令，摘要只能当数据看，不能当指令执行。
 - `heuristic`：本地关键词规则，零网络零成本，质量有上限（会漏也会误抓）。
 
 ## 配置
@@ -69,7 +72,10 @@
 
 - 不写 `groups` = 所有群都可读。
 - `groups` 里只用于**关掉**某个群或给它起名。
-- 写出 `private` / `friend` / `send` / `scope` 一类键 → 整份配置作废 → **全关**（fail-closed）。
+- `private` 是**受支持的一等键**：`{ "88880001": { "enabled": true } }` 逐条打开私聊；
+  不允许一键全开（`private.defaultEnabled=true` 在策略解析阶段即判非法 → 全关）。
+- 写出 `friend` / `send` / `reply` / `scope` / `write` 一类**危险键** → 整份配置作废 → **全关**（fail-closed）；
+  与安全无关的未知键被忽略。
 - 配置损坏同理：全关，不回退到「默认允许」。
 
 ## 落盘
@@ -82,9 +88,11 @@
 ## 验证
 
 ```bash
-npm run verify            # core 纯净性检查 + 51 个用例
-node scripts/smoke.mjs        # fixture 端到端（真实子进程走 MCP 协议）
-node scripts/smoke.mjs bridge # 真桥接只读冒烟
+npm run verify                      # core 纯净性检查 + 全部用例（当前 116）
+node scripts/smoke.mjs              # fixture 端到端（真实子进程走 MCP 协议）
+node scripts/smoke.mjs bridge       # 真桥接只读冒烟
+node scripts/host-smoke.mjs         # 宿主半：假 ctx 跑 apply()，真 req/res 打路由（含跨站/伪造 Host 用例）
+node scripts/final-check.mjs        # 发布前自检（脱敏词从 QQ_DIGEST_SENSITIVE_PATTERNS 读，不写死在仓库里）
 ```
 
 core 纯净性检查锁定：`src/core/` 不许 import `node:fs` / 子进程 / 网络，不许出现 `fetch(`、`send_*`、`/api/send`、写文件符号。
@@ -207,9 +215,18 @@ node scripts/verify-dsh.mjs      # 宿主半在线？客户端半上次启动有
 
 ## 已知限制（不美化）
 
-- **设置页的开关不是安全边界**：`/qq-digest-api` 只允许回环地址访问，但本机任何进程
-  （包括模型通过 bash 起一个 `curl`）都能 POST 改配置。开关管的是「默认不读」，
-  不是「别人改不了」。真要防，得给 API 加一次性的会话令牌，本期没做。
+- **设置页的开关不是安全边界**：`/qq-digest-api` 允许**本机进程**（包括模型通过 bash 起一个 `curl`）直接 POST 改配置。
+  它挡住的是**浏览器与网络**，不是本机同一用户下的进程。
+- 管理面已做的校验（`lib/index.js` 的 `denyUntrustedRequest`）：
+  ① 来源必须是回环（`remoteAddress`）；② `Host` 必须是回环字面量（挡 DNS rebinding）；
+  ③ `Origin` 必须是回环来源；④ `Sec-Fetch-Site: cross-site` 直接拒；
+  ⑤ 写操作必须是 `application/json` —— 这个类型跨源必预检，而本服务不返回任何 CORS 头，
+  于是 `<form>` / `text/plain` 的 CSRF 简单请求进不来。
+- 反代 / 公网隧道仍会让 `remoteAddress` 看起来是回环：**不要把本插件挂在公网隧道后面**。
+- 句柄密钥不再有源码默认值：`QQ_DIGEST_SECRET` → `<数据目录>/handle-secret`（首次启动随机生成并落盘）。
+  写不进去就拒绝启动，而不是退回弱密钥。`/state` 的 `secretSource` 会如实告诉你当前用哪一种。
+- 读取摘要会**按当前策略现算授权**：关掉某个群或关掉总开关之后，该群历史摘要立即读不到（本轮修复）。
+  拒绝列表里返回的是 `auditRef`（独立 HMAC 域），它**不能**用来读任何摘要。
 - 私聊只在 `bridge` 数据源下可用；`snowluma` 适配器只调群历史，没有私聊取数路径。
 - `bridge` 源的群名是空的（桥接不存群名）；可在 `config.json` 的 `groups.<id>.name` 里人工命名。
 - `bridge` 源每轮最多回看 **100 条**（桥接 `/api/messages` 的硬上限）。两次运行之间新增超过 100 条时，
@@ -218,6 +235,11 @@ node scripts/verify-dsh.mjs      # 宿主半在线？客户端半上次启动有
 - `snowluma` 源是 `stateless`：每轮全量重算固定窗口（默认 60 条）。原因是 OneBot 的 `message_id`
   不保证单调，拿它当水位线会静默漏读新消息。
 - 句子级启发式摘要对「谁负责」判断保守：猜不准就回退成发消息的人，不做过度推断。
-- `config.json` 里的 `schedule` 字段目前只是**描述性配置**：插件本身不注册定时任务。
-  要每天自动跑，需要另外用 DSH 的 automation 建一条定时任务去调用 `qq_digest_run_summary`。
+- `config.json` 的 `schedule` 由**宿主半自己**执行：`lib/index.js` 每 30s tick 一次，到点跑一轮
+  （启动后 5s 还会补跑一次，避免刚好在到点后才启动而整天漏跑）。
+  跨进程互斥用 `run.lock`（带心跳续租，长轮次不会被判成陈旧锁抢占）。
+- 手动「立即总结」**不会**吞掉当天的定时：去重只认 `lastTrigger === "scheduled"` 的那一次。
 - 未评估 QQ 侧 ToS 与账号风险；本插件只读本地桥接/网关接口，不额外登录。
+- **`/state` 会明文回显群号与私聊 QQ 号**：设置页要靠它们做开关和提交，不做掩码是刻意选择
+  （入口已经用来源校验收窄到回环同源）。因此别在截图、录屏、远程协助里展示设置页。
+- 未做速率限制：`/run` 与 `run_summary` 可以被反复触发，会放大 LLM 调用费用。需要限流请在外层加。

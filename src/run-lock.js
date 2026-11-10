@@ -8,10 +8,17 @@
  * 超过 lease 时限视为陈旧锁并抢占，避免进程崩溃后永久卡死。
  */
 
-import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const DEFAULT_LEASE_MS = 10 * 60_000;
+/**
+ * 心跳间隔。租期只有 10 分钟，而一轮最坏可能跑几个小时
+ * （200 个房间上限 × LLM 单次 60s 超时 + 桥接 15s），所以必须续租：
+ * 否则「还在跑」的锁会被下一个触发者判成陈旧锁抢占，两轮并发写水位线，
+ * 表现为重复摘要与水位线互相覆盖 —— 也就是锁存在的唯一理由失效。
+ */
+const DEFAULT_HEARTBEAT_MS = 60_000;
 
 export function lockPath(dir) {
   return join(dir, 'run.lock');
@@ -22,18 +29,43 @@ export function lockPath(dir) {
  * @param {{ leaseMs?: number, now?: () => number }} [options]
  */
 export function acquireRunLock(dir, options = {}) {
-  const { leaseMs = DEFAULT_LEASE_MS, now = () => Date.now() } = options;
+  const {
+    leaseMs = DEFAULT_LEASE_MS,
+    heartbeatMs = DEFAULT_HEARTBEAT_MS,
+    now = () => Date.now(),
+  } = options;
   const path = lockPath(dir);
   const owner = { pid: process.pid, at: now() };
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       mkdirSync(path);
-      writeFileSync(join(path, 'owner.json'), `${JSON.stringify(owner)}\n`, 'utf8');
+      const ownerFile = join(path, 'owner.json');
+      writeFileSync(ownerFile, `${JSON.stringify(owner)}\n`, 'utf8');
+
+      // 续租：age 判定看的是**目录** mtime，所以心跳除了刷新 owner.json 还要 touch 目录本身。
+      let timer = null;
+      if (heartbeatMs > 0) {
+        const period = Math.max(1_000, Math.min(heartbeatMs, Math.floor(leaseMs / 2)));
+        timer = setInterval(() => {
+          try {
+            const beat = { pid: process.pid, at: now() };
+            writeFileSync(ownerFile, `${JSON.stringify(beat)}\n`, 'utf8');
+            const at = new Date();
+            utimesSync(path, at, at);
+          } catch {
+            // 心跳失败不该让整轮失败：下一轮最多被判成陈旧锁，行为与没有心跳时相同。
+          }
+        }, period);
+        timer.unref?.();
+      }
+
       return {
         ok: true,
         path,
+        owner,
         release() {
+          if (timer) clearInterval(timer);
           try {
             rmSync(path, { recursive: true, force: true });
           } catch {

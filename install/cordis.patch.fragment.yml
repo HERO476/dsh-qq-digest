@@ -6,7 +6,10 @@
       config:
         serverName: qq-digest
         transport: stdio
-        command: 'D:\Program Files\nodejs\node.exe'
+        # __NODE_EXE__ 由 install.mjs 用 process.execPath 替换。
+        # 模板里绝不能出现作者机器上的绝对路径：换台机器就会 spawn ENOENT，
+        # 表现为「MCP 工具全部消失但插件看起来装上了」。
+        command: '__NODE_EXE__'
         args:
           - '__PACKAGE_ROOT__/src/run-mcp.mjs'
         toolCallTimeoutMs: 180000

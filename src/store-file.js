@@ -7,7 +7,7 @@
  * 损坏行启动时跳过并计数，不因为一行坏掉就丢整份历史。
  */
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { RECORD_FIELDS, fail } from './core/store.js';
@@ -23,26 +23,87 @@ export function createFileStore({ dir, now = () => new Date().toISOString() } = 
   const entries = [];
   let skippedLines = 0;
   let allowed = new Set();
+  let stamp = null;
 
-  if (existsSync(file)) {
-    const text = readFileSync(file, 'utf8');
-    for (const line of text.split('\n')) {
-      const trimmed = line.trim();
-      if (trimmed === '') continue;
-      try {
-        const parsed = JSON.parse(trimmed);
-        if (parsed && typeof parsed.roomHandle === 'string') entries.push(parsed);
-        else skippedLines += 1;
-      } catch {
-        skippedLines += 1;
-      }
+  function currentStamp() {
+    try {
+      const stat = statSync(file);
+      return `${stat.mtimeMs}:${stat.size}`;
+    } catch {
+      return 'missing';
     }
   }
+
+  /** 载入时按落盘白名单重建：文件可能被别的进程改过，原样塞进内存等于绕过白名单。 */
+  function rebuildRecord(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    if (typeof raw.roomHandle !== 'string' || !/^[0-9a-f]{16}$/.test(raw.roomHandle)) return null;
+
+    const p = raw.provenance;
+    if (!p || typeof p.seqFrom !== 'number' || typeof p.seqTo !== 'number') return null;
+
+    const draft = {
+      roomHandle: raw.roomHandle,
+      roomTitle: typeof raw.roomTitle === 'string' ? raw.roomTitle.slice(0, 60) : null,
+      digest: sanitizeDigest(raw.digest),
+      provenance: {
+        roomHandle: raw.roomHandle,
+        seqFrom: p.seqFrom,
+        seqTo: p.seqTo,
+        ...(typeof p.messageCount === 'number' ? { messageCount: p.messageCount } : {}),
+      },
+      trigger: raw.trigger === 'scheduled' ? 'scheduled' : 'manual',
+      createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : now(),
+    };
+
+    return Object.freeze(
+      Object.fromEntries(RECORD_FIELDS.filter((key) => key in draft).map((key) => [key, draft[key]])),
+    );
+  }
+
+  function loadFromDisk() {
+    entries.length = 0;
+    skippedLines = 0;
+    try {
+      const text = readFileSync(file, 'utf8');
+      for (const line of text.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed === '') continue;
+        try {
+          const rebuilt = rebuildRecord(JSON.parse(trimmed));
+          if (rebuilt) entries.push(rebuilt);
+          else skippedLines += 1;
+        } catch {
+          skippedLines += 1;
+        }
+      }
+    } catch {
+      // 文件不存在 = 空表
+    }
+    stamp = currentStamp();
+  }
+
+  /**
+   * 跨进程可见性：MCP 子进程写入的摘要，宿主进程（设置页）也必须看得到。
+   * 用 mtime+size 判断有没有变化，变了就整体重载 —— 比 tail 增量简单，
+   * 也不会因为读到半行而把一条合法记录判成损坏。
+   */
+  function refresh() {
+    if (currentStamp() !== stamp) loadFromDisk();
+  }
+
+  loadFromDisk();
 
   return {
     dir,
     file,
-    skippedLines,
+
+    get skippedLines() {
+      refresh();
+      return skippedLines;
+    },
+
+    refresh,
 
     bindAllowed(handles) {
       allowed = new Set(Array.isArray(handles) ? handles : []);
@@ -78,14 +139,18 @@ export function createFileStore({ dir, now = () => new Date().toISOString() } = 
 
       appendFileSync(file, `${JSON.stringify(stored)}\n`, 'utf8');
       entries.push(stored);
+      // 自己刚写过：记下新的 stamp，避免下一次读取又整体重载一遍。
+      stamp = currentStamp();
       return stored;
     },
 
     all() {
+      refresh();
       return entries.slice();
     },
 
     latest(roomHandle) {
+      refresh();
       for (let index = entries.length - 1; index >= 0; index -= 1) {
         if (entries[index].roomHandle === roomHandle) return entries[index];
       }
@@ -93,12 +158,14 @@ export function createFileStore({ dir, now = () => new Date().toISOString() } = 
     },
 
     latestPerRoom() {
+      refresh();
       const map = new Map();
       for (const entry of entries) map.set(entry.roomHandle, entry);
       return [...map.values()];
     },
 
     dump() {
+      refresh();
       return JSON.stringify(entries);
     },
   };

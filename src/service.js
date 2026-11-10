@@ -40,6 +40,8 @@ export function createService(options = {}) {
     getPolicy: externalPolicyProvider,
     // 桥接不提供群名，允许外部按 rawId 补一个显示名（只用于展示，不参与裁决）。
     titleProvider = null,
+    // 密钥来源：env | generated | file | unknown。只用于如实上报，绝不外传值。
+    secretSource = 'unknown',
   } = options;
 
   if (!adapter) throw new Error('SERVICE_MISSING_ADAPTER');
@@ -142,16 +144,62 @@ export function createService(options = {}) {
   }
 
   function getDigest(handle) {
-    if (handle !== undefined && handle !== null && handle !== '') {
-      if (typeof handle !== 'string' || !/^[0-9a-f]{16}$/.test(handle)) {
-        return { status: 'REJECTED', reason: 'INVALID_HANDLE' };
-      }
+    return readDigest(handle);
+  }
+
+  /**
+   * 读取已落盘摘要。
+   *
+   * 关键约束：**读取也必须过闸门**。
+   * 句柄是不透明令牌，但它只证明「签发时策略放行过这个房间」，不证明「现在仍然放行」。
+   * 因此每次读取都先按当前策略对数据源现算一遍允许集，再与存储求交 ——
+   * 关掉某个群 / 关掉总开关之后，历史摘要立即读不到（撤销语义成立）。
+   *
+   * 数据源不可用时不允许「先读再说」：无法确认当前允许谁，就一律拒绝。
+   */
+  async function readDigest(handle) {
+    const hasHandle = handle !== undefined && handle !== null && handle !== '';
+    if (hasHandle && (typeof handle !== 'string' || !/^[0-9a-f]{16}$/.test(handle))) {
+      return { status: 'REJECTED', reason: 'INVALID_HANDLE' };
+    }
+
+    const allowed = await currentAllowedHandles();
+    if (!allowed.ok) {
+      return {
+        status: 'DENIED',
+        reason: 'SOURCE_UNAVAILABLE',
+        detail: allowed.error?.code ?? null,
+      };
+    }
+
+    if (hasHandle) {
+      // 不在允许集里，与「没有摘要」返回同一个结果：不告诉调用方它是否存在。
+      if (!allowed.handles.has(handle)) return { status: 'NOT_FOUND' };
       const entry = store.latest(handle);
       return entry ? { status: 'OK', entry } : { status: 'NOT_FOUND' };
     }
 
     const rows = typeof store.latestPerRoom === 'function' ? store.latestPerRoom() : dedupeLatest(store.all());
-    return { status: 'OK', count: rows.length, items: rows };
+    const visible = rows.filter((row) => allowed.handles.has(row.roomHandle));
+    return { status: 'OK', count: visible.length, items: visible };
+  }
+
+  /** 按当前策略现算「此刻允许读」的句柄集合。数据源失败时返回 ok:false。 */
+  async function currentAllowedHandles() {
+    const policy = resolvePolicy();
+    let rooms;
+    try {
+      rooms = await adapter.listRooms();
+    } catch (err) {
+      return { ok: false, error: { code: err?.code ?? 'ADAPTER_ERROR', message: String(err?.message ?? err) } };
+    }
+
+    const handles = new Set();
+    for (const room of rooms) {
+      const decision = gate({ policy, rawId: room.rawId, authoritativeKind: room.authoritativeKind });
+      if (decision.verdict === 'ALLOW') handles.add(decision.roomHandle);
+    }
+    return { ok: true, handles, policy };
   }
 
   async function status() {
@@ -173,8 +221,10 @@ export function createService(options = {}) {
       adapterError,
       digestCount: store.all().length,
       lastRun,
-      // 句柄密钥只报「是否设置」，绝不报值。
-      secretConfigured: typeof secret === 'string' && secret.length >= 16,
+      // 句柄密钥只报「是否设置」与「来源」，绝不报值。
+      // 注意：源码里不再有默认常量，因此 secretConfigured 不会再出现「恒真」的假保证。
+      secretConfigured: typeof secret === 'string' && secret.length >= 16 && secretSource !== 'default',
+      secretSource,
     };
   }
 

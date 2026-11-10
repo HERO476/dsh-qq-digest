@@ -26,8 +26,21 @@ export const REASON = Object.freeze({
   GROUP_DISABLED: 'GROUP_DISABLED',
 });
 
+/** 读取句柄：拿到它意味着「当前策略放行这个房间」。 */
 export function roomHandle(secret, canonicalId) {
   return createHmac('sha256', secret).update(`room:${canonicalId}`).digest('hex').slice(0, 16);
+}
+
+/**
+ * 审计引用：与读取句柄**必须不同域**。
+ *
+ * 拒绝分支也要能回一个稳定的、可对账但不泄漏标识的引用；但如果直接复用 roomHandle，
+ * 拒绝就等于把「读取凭据」发给了被拒绝的一方 —— 模型可以从 denied[] 里取到被拒绝房间的
+ * 句柄，再去读该房间的历史摘要，撤销语义直接失效。
+ * 因此审计引用走 `audit:` 域，它**不能**用来读任何东西。
+ */
+export function auditRefFor(secret, canonicalId) {
+  return createHmac('sha256', secret).update(`audit:${canonicalId}`).digest('hex').slice(0, 16);
 }
 
 export function createGate({ secret }) {
@@ -47,7 +60,8 @@ export function createGate({ secret }) {
     }
 
     const { canonicalId, kind } = canon;
-    const auditRef = roomHandle(secret, canonicalId);
+    // 审计引用与读取句柄分属两个 HMAC 域：拒绝时只发放 auditRef，它读不了任何东西。
+    const auditRef = auditRefFor(secret, canonicalId);
 
     // 交叉校验：声明形态必须与数据源给出的权威类型一致，不一致即拒。
     if (authoritativeKind !== undefined && authoritativeKind !== null && authoritativeKind !== kind) {
@@ -68,7 +82,7 @@ export function createGate({ secret }) {
     return Object.freeze({
       verdict: VERDICT.ALLOW,
       kind,
-      roomHandle: auditRef,
+      roomHandle: roomHandle(secret, canonicalId),
       auditRef,
     });
   };

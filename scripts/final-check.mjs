@@ -47,16 +47,31 @@ const remote = run('git', ['remote', '-v']);
 info('remote', remote.ok && remote.out ? remote.out.split('\n')[0] : '(未配置)');
 
 // ── 2. 脱敏 ──────────────────────────────────────────────────────────────
-const PATTERNS = ['30000', '1000000001', '123456789', '1000000002'];
+// 敏感词**不能写在这个文件里**：本文件随 npm 包一起发布（package.json files 含 scripts），
+// 把真实 QQ 号/群号写进来，等于用「检查泄漏的脚本」本身泄漏一遍，而且它还会命中自己，
+// 于是永远报 4 项 FAIL。现在改为外部注入：
+//   QQ_DIGEST_SENSITIVE_PATTERNS="123456,88888888" node scripts/final-check.mjs
+const PATTERNS = String(process.env.QQ_DIGEST_SENSITIVE_PATTERNS ?? '')
+  .split(',')
+  .map((value) => value.trim())
+  .filter((value) => value !== '');
+
+// 排除检查器自身：否则只要配了词，就必然命中这个文件。
+const GREP_EXCLUDE = [':(exclude)scripts/final-check.mjs'];
+
 let leak = 0;
-for (const pattern of PATTERNS) {
-  const hit = run('git', ['grep', '-n', pattern, '--', '.']);
-  if (hit.ok && hit.out !== '') {
-    bad(`仓库里仍有 ${pattern}`, hit.out.split('\n').slice(0, 2).join(' | '));
-    leak += 1;
+if (PATTERNS.length === 0) {
+  info('脱敏', '未设置 QQ_DIGEST_SENSITIVE_PATTERNS，已跳过（仓库内不得残留个人标识）');
+} else {
+  for (const pattern of PATTERNS) {
+    const hit = run('git', ['grep', '-n', pattern, '--', '.', ...GREP_EXCLUDE]);
+    if (hit.ok && hit.out !== '') {
+      bad(`仓库里仍有 ${pattern}`, hit.out.split('\n').slice(0, 2).join(' | '));
+      leak += 1;
+    }
   }
+  if (leak === 0) ok('仓库内无个人标识（QQ/群号/用户名）');
 }
-if (leak === 0) ok('仓库内无个人标识（QQ/群号/用户名）');
 
 const bridgePath = join(root, 'src', 'adapters', 'bridge.js');
 const bridgeSrc = run('node', ['-e', `process.stdout.write(require('node:fs').readFileSync(${JSON.stringify(bridgePath)},'utf8'))`]);

@@ -8,7 +8,8 @@
  *   DSH_HOME 空白视为未设置，绝不退回 cwd（否则换个目录启动就多一份空数据）。
  */
 
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -20,10 +21,10 @@ import { configPath, loadConfig } from './config.js';
 import { createSummarizerFromConfig } from './summarizer-factory.js';
 import { createService } from './service.js';
 import { resolveLlmConfig } from './llm-config.mjs';
-
-export const DEFAULT_SECRET = 'qq-digest-local-dev-secret-0123456789';
-
 import { resolveBridgePaths } from './bridge-paths.js';
+
+export const HANDLE_SECRET_FILE = 'handle-secret';
+export const MIN_SECRET_LENGTH = 16;
 
 export function resolveDshHome(env = process.env) {
   const fromEnv = env.DSH_HOME;
@@ -37,9 +38,48 @@ export function resolveDataDir(env = process.env) {
   return join(resolveDshHome(env), 'qq-digest');
 }
 
-export function resolveSecret(env = process.env) {
-  const value = env.QQ_DIGEST_SECRET;
-  return typeof value === 'string' && value.length >= 16 ? value : DEFAULT_SECRET;
+export function secretPath(dataDir) {
+  return join(dataDir, HANDLE_SECRET_FILE);
+}
+
+/**
+ * 解析句柄 HMAC 密钥，并如实说明来源。
+ *
+ * 为什么不再有「默认常量」：常量写死在源码里，等于句柄可离线计算 ——
+ * 知道群号/QQ 号的人就能算出 handle 去定向读摘要，不透明句柄这层保护归零。
+ *
+ * 优先级：QQ_DIGEST_SECRET（>=16 字符）→ <dataDir>/handle-secret → 首次启动随机生成并落盘。
+ * 必须落盘：只存内存会让每次重启都换密钥，水位线（按句柄作键）全部作废，等于每次重启全量重跑。
+ */
+export function resolveSecretInfo(env = process.env, dataDir = resolveDataDir(env)) {
+  const fromEnv = env.QQ_DIGEST_SECRET;
+  if (typeof fromEnv === 'string' && fromEnv.trim().length >= MIN_SECRET_LENGTH) {
+    return { secret: fromEnv.trim(), source: 'env' };
+  }
+
+  const file = secretPath(dataDir);
+  try {
+    const existing = readFileSync(file, 'utf8').trim();
+    if (existing.length >= MIN_SECRET_LENGTH) return { secret: existing, source: 'file' };
+  } catch {
+    // 文件不存在 → 下面生成
+  }
+
+  const generated = randomBytes(32).toString('hex');
+  try {
+    mkdirSync(dataDir, { recursive: true });
+    writeFileSync(file, `${generated}\n`, { encoding: 'utf8', mode: 0o600 });
+  } catch (err) {
+    // 写不进去就拒绝启动：宁可工具不可用，也不要用一个「一看就知道」的密钥继续跑。
+    const failure = new Error(`HANDLE_SECRET_UNWRITABLE:${file}:${err?.message ?? err}`);
+    failure.code = 'HANDLE_SECRET_UNWRITABLE';
+    throw failure;
+  }
+  return { secret: generated, source: 'generated' };
+}
+
+export function resolveSecret(env = process.env, dataDir = resolveDataDir(env)) {
+  return resolveSecretInfo(env, dataDir).secret;
 }
 
 export function readBridgeToken(tokenFile) {
@@ -93,10 +133,14 @@ export function createRuntime(options = {}) {
 
   const store = options.store ?? createFileStore({ dir: dataDir });
   const watermark = options.watermark ?? createFileWatermark({ dir: dataDir });
+  const secretInfo = options.secret
+    ? { secret: options.secret, source: 'explicit' }
+    : resolveSecretInfo(env, dataDir);
 
   const service = createService({
     adapter,
-    secret: options.secret ?? resolveSecret(env),
+    secret: secretInfo.secret,
+    secretSource: secretInfo.source,
     store,
     watermark,
     getPolicy: () => readConfig().policy,
@@ -112,5 +156,17 @@ export function createRuntime(options = {}) {
     summarize: (input) => createSummarizerFromConfig(readConfig().config, { llm })(input),
   });
 
-  return { dataDir, source, adapter, llm, store, watermark, readConfig, configPath: configPath(dataDir), service };
+  return {
+    dataDir,
+    source,
+    adapter,
+    llm,
+    store,
+    watermark,
+    readConfig,
+    configPath: configPath(dataDir),
+    service,
+    secret: secretInfo.secret,
+    secretSource: secretInfo.source,
+  };
 }

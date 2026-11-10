@@ -17,15 +17,28 @@
  */
 
 import { createInterface } from 'node:readline';
+import { readFileSync } from 'node:fs';
 
 import { createRuntime } from './runtime.js';
 import { withRunLock } from './run-lock.js';
 import { createToolHandlers } from './tools.js';
 import { TOOLS } from './core/toolSurface.js';
 
+/** 版本只有一个真相源：package.json。硬编码会漂（serverInfo 与包版本打对不上）。 */
+function readPackageVersion() {
+  try {
+    const parsed = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    return typeof parsed?.version === 'string' ? parsed.version : '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
+
+const VERSION = readPackageVersion();
+
 const runtime = createRuntime();
 process.stderr.write(
-  `[qq-digest] source=${runtime.source} data=${runtime.dataDir} llmKey=${runtime.llm.apiKeySource}\n`,
+  `[qq-digest] source=${runtime.source} data=${runtime.dataDir} llmKey=${runtime.llm.apiKeySource} secretSource=${runtime.secretSource}\n`,
 );
 
 // run_summary 走跨进程锁；拿不到锁如实返回 ALREADY_RUNNING，而不是重复跑一轮。
@@ -63,7 +76,7 @@ rl.on('line', async (line) => {
         result: {
           protocolVersion: '2024-11-05',
           capabilities: { tools: {} },
-          serverInfo: { name: 'qq-digest', version: '0.2.0' },
+          serverInfo: { name: 'qq-digest', version: VERSION },
         },
       });
       return;

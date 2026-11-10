@@ -47,12 +47,19 @@ if (captured.kind !== 'prefix' || captured.path !== '/qq-digest-api') {
   process.exit(1);
 }
 
-function request(handler, { method = 'GET', url, body }) {
+function request(handler, { method = 'GET', url, body, headers = {}, remoteAddress = '127.0.0.1' }) {
   return new Promise((resolve, reject) => {
     const req = new Readable({ read() {} });
     req.method = method;
     req.url = url;
-    req.socket = { remoteAddress: '127.0.0.1' };
+    // 真实请求一定带 Host；写操作还带 content-type。
+    // 宿主半现在会校验 Host / Origin / Sec-Fetch-Site，所以这里要把「正常浏览器」的形状补齐。
+    req.headers = {
+      host: '127.0.0.1:4845',
+      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+      ...headers,
+    };
+    req.socket = { remoteAddress };
     if (body !== undefined) req.push(JSON.stringify(body));
     req.push(null);
 
@@ -174,6 +181,48 @@ const uniqueSave = await request(captured.handler, {
   body: { groupsEnabled: true, groups: { '100000': { enabled: true, name: '甲' } }, private: { '88880001': { enabled: false, name: '乙' } }, summarizer: 'heuristic', schedule: { enabled: false, kind: 'daily', time: '09:00', weekdays: ['MO'], timeZone: 'Asia/Shanghai' } },
 });
 check('名字互不相同 → 200', uniqueSave.status === 200, uniqueSave.status);
+
+
+// ── 管理面来源校验（跨站 / rebinding / 隧道 / CSRF）──────────────────────
+// 这些用例锁住的是「只判 remoteAddress 不够」这件事本身：
+// 每一条的攻击前提都能让 remoteAddress 看起来是回环。
+const evilOrigin = await request(captured.handler, {
+  method: 'POST',
+  url: '/qq-digest-api/config',
+  body: { groupsEnabled: false },
+  headers: { origin: 'https://evil.example' },
+});
+check('跨站 Origin → 403', evilOrigin.status === 403 && evilOrigin.json.error === 'BAD_ORIGIN', `${evilOrigin.status} ${JSON.stringify(evilOrigin.json)}`);
+
+const evilHost = await request(captured.handler, { url: '/qq-digest-api/state', headers: { host: 'evil.example:4845' } });
+check('伪造 Host（DNS rebinding）→ 403', evilHost.status === 403 && evilHost.json.error === 'BAD_HOST', `${evilHost.status} ${JSON.stringify(evilHost.json)}`);
+
+const crossSite = await request(captured.handler, {
+  method: 'POST',
+  url: '/qq-digest-api/run',
+  body: {},
+  headers: { 'sec-fetch-site': 'cross-site' },
+});
+check('Sec-Fetch-Site: cross-site → 403', crossSite.status === 403 && crossSite.json.error === 'CROSS_SITE', `${crossSite.status} ${JSON.stringify(crossSite.json)}`);
+
+const textPlain = await request(captured.handler, {
+  method: 'POST',
+  url: '/qq-digest-api/config',
+  body: { groupsEnabled: true },
+  headers: { 'content-type': 'text/plain', origin: 'https://evil.example' },
+});
+check('text/plain 简单请求（CSRF）→ 被来源校验挡住', textPlain.status === 403 || textPlain.status === 415, `${textPlain.status} ${JSON.stringify(textPlain.json)}`);
+
+const sameOriginNoBody = await request(captured.handler, {
+  method: 'POST',
+  url: '/qq-digest-api/client-boot',
+  body: { phase: 'factory' },
+  headers: { origin: 'http://127.0.0.1:4845' },
+});
+check('同源 Origin + application/json → 放行', sameOriginNoBody.status === 200, `${sameOriginNoBody.status} ${JSON.stringify(sameOriginNoBody.json)}`);
+
+const nonLoopback = await request(captured.handler, { url: '/qq-digest-api/state', remoteAddress: '192.168.1.10' });
+check('非回环来源 → 403 LOCAL_ONLY', nonLoopback.status === 403 && nonLoopback.json.error === 'LOCAL_ONLY', `${nonLoopback.status} ${JSON.stringify(nonLoopback.json)}`);
 
 for (const result of results) {
   console.log(`${result.ok ? 'PASS' : 'FAIL'}  ${result.name}${result.detail === undefined ? '' : `  (${result.detail})`}`);
