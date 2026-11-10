@@ -13,14 +13,15 @@
  * 不做任何「看起来像群就当群」的推断 —— 分类只发生在 core/canonical.js。
  */
 
+import { resolveBridgePaths } from '../bridge-paths.js';
+
 const DEFAULT_BASE_URL = 'http://127.0.0.1:3100';
-const DEFAULT_TOKEN_FILE = 'D:/Users/30000/AI/qq-bridge/state/console-token';
 const REQUEST_TIMEOUT_MS = 15_000;
 
 export function createBridgeAdapter(options = {}) {
   const {
     baseUrl = process.env.QQ_DIGEST_BRIDGE_URL || DEFAULT_BASE_URL,
-    tokenFile = process.env.QQ_DIGEST_BRIDGE_TOKEN_FILE || DEFAULT_TOKEN_FILE,
+    tokenFile = process.env.QQ_DIGEST_BRIDGE_TOKEN_FILE || resolveBridgePaths({ env: process.env }).token,
     maxRooms = 200,
     messageLimit = 100,
     readToken,

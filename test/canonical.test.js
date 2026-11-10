@@ -4,11 +4,11 @@ import assert from 'node:assert/strict';
 import { canonicalize, isGroupId, KIND } from '../src/core/canonical.js';
 
 test('群：唯一认可的形态是 group:<数字>', () => {
-  const result = canonicalize('group:123456789');
+  const result = canonicalize('group:70001111');
   assert.equal(result.ok, true);
   assert.equal(result.kind, KIND.GROUP);
-  assert.equal(result.canonicalId, 'group:123456789');
-  assert.equal(result.groupId, '123456789');
+  assert.equal(result.canonicalId, 'group:70001111');
+  assert.equal(result.groupId, '70001111');
 });
 
 test('群号去前导零，同一个群只可能有一个 canonicalId', () => {
@@ -18,7 +18,7 @@ test('群号去前导零，同一个群只可能有一个 canonicalId', () => {
 });
 
 test('私聊：所有已知形态都归为 PRIVATE', () => {
-  for (const raw of ['private:1000000001', 'user:1000000001', 'friend:1000000001', 'c2c:1000000001', 'temp:1', 'stranger:1', 'uin:1000000001']) {
+  for (const raw of ['private:88880001', 'user:88880001', 'friend:88880001', 'c2c:88880001', 'temp:1', 'stranger:1', 'uin:88880001']) {
     const result = canonicalize(raw);
     assert.equal(result.ok, true, raw);
     assert.equal(result.kind, KIND.PRIVATE, raw);
@@ -26,7 +26,7 @@ test('私聊：所有已知形态都归为 PRIVATE', () => {
 });
 
 test('裸数字一律 UNKNOWN，绝不猜成群', () => {
-  for (const raw of ['1000000001', '123456789', '12345']) {
+  for (const raw of ['88880001', '70001111', '12345']) {
     const result = canonicalize(raw);
     assert.equal(result.ok, true, raw);
     assert.equal(result.kind, KIND.UNKNOWN, `${raw} 必须不能被当成群`);

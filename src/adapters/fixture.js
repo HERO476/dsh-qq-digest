@@ -35,8 +35,8 @@ export function createFixtureAdapter(fixture = DEFAULT_FIXTURE) {
 export const DEFAULT_FIXTURE = Object.freeze({
   rooms: Object.freeze([
     Object.freeze({ rawId: 'group:100000', authoritativeKind: 'group', name: '产品研发群', groupId: '100000' }),
-    Object.freeze({ rawId: 'group:123456789', authoritativeKind: 'group', name: '客户对接群', groupId: '123456789' }),
-    Object.freeze({ rawId: 'private:1000000001', name: null }),
+    Object.freeze({ rawId: 'group:70001111', authoritativeKind: 'group', name: '客户对接群', groupId: '70001111' }),
+    Object.freeze({ rawId: 'private:88880001', name: null }),
     Object.freeze({ rawId: 'guild:123456', name: '某频道' }),
   ]),
   messages: Object.freeze({
@@ -63,7 +63,7 @@ export const DEFAULT_FIXTURE = Object.freeze({
         text: '收到，今天下班前把问题清单发群里。',
       }),
     ]),
-    'group:123456789': Object.freeze([
+    'group:70001111': Object.freeze([
       Object.freeze({
         seq: 1,
         time: 1762746400000,
@@ -79,7 +79,7 @@ export const DEFAULT_FIXTURE = Object.freeze({
         text: '联调时间表我来排，明天下班前给。',
       }),
     ]),
-    'private:1000000001': Object.freeze([
+    'private:88880001': Object.freeze([
       Object.freeze({
         seq: 1,
         time: 1762746600000,

@@ -115,7 +115,7 @@ if (base === null) {
     return { status: res.status, json: await res.json().catch(() => ({})) };
   };
 
-  const badGroup = await post('/qq-digest-api/config', { groups: { 'private:1000000001': { enabled: true } } });
+  const badGroup = await post('/qq-digest-api/config', { groups: { 'private:88880001': { enabled: true } } });
   if (badGroup.status === 400) ok('群列表里塞私聊 id → 400');
   else bad('群列表里塞私聊 id 没被拒', badGroup.status);
 

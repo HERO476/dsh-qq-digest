@@ -8,6 +8,6 @@
         transport: stdio
         command: 'D:\Program Files\nodejs\node.exe'
         args:
-          - 'D:/Users/30000/AI/dsh-qq-digest/src/run-mcp.mjs'
+          - '__PACKAGE_ROOT__/src/run-mcp.mjs'
         toolCallTimeoutMs: 180000
 # === qq-digest MCP END ===

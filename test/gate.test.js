@@ -9,15 +9,15 @@ const gate = createGate({ secret: SECRET });
 const policy = defaultPolicy();
 
 test('群默认放行，并返回不透明句柄而不是群号', () => {
-  const decision = gate({ policy, rawId: 'group:123456789', authoritativeKind: 'group' });
+  const decision = gate({ policy, rawId: 'group:70001111', authoritativeKind: 'group' });
   assert.equal(decision.verdict, VERDICT.ALLOW);
   assert.match(decision.roomHandle, /^[0-9a-f]{16}$/);
-  assert.equal(decision.roomHandle, roomHandle(SECRET, 'group:123456789'));
-  assert.equal(JSON.stringify(decision).includes('123456789'), false);
+  assert.equal(decision.roomHandle, roomHandle(SECRET, 'group:70001111'));
+  assert.equal(JSON.stringify(decision).includes('70001111'), false);
 });
 
 test('私聊默认拒绝（逐条打开之前一律不读）', () => {
-  const privateIds = ['private:1', 'private:1000000001', 'user:1', 'friend:1', 'c2c:1', 'temp:1', 'stranger:1', 'uin:1'];
+  const privateIds = ['private:1', 'private:88880001', 'user:1', 'friend:1', 'c2c:1', 'temp:1', 'stranger:1', 'uin:1'];
   for (const rawId of privateIds) {
     assert.equal(gate({ policy, rawId }).reason, REASON.PRIVATE_FORBIDDEN, rawId);
   }
@@ -27,17 +27,17 @@ test('被显式打开的私聊才放行，且句柄不泄漏 QQ 号', () => {
   const opened = parsePolicy({
     version: 1,
     group: { defaultEnabled: true, overrides: {} },
-    private: { defaultEnabled: false, overrides: { 'private:1000000001': { enabled: true } } },
+    private: { defaultEnabled: false, overrides: { 'private:88880001': { enabled: true } } },
   });
   assert.equal(opened.ok, true);
 
-  const decision = gate({ policy: opened.policy, rawId: 'private:1000000001' });
+  const decision = gate({ policy: opened.policy, rawId: 'private:88880001' });
   assert.equal(decision.verdict, VERDICT.ALLOW);
-  assert.equal(decision.roomHandle, roomHandle(SECRET, 'private:1000000001'));
-  assert.equal(JSON.stringify(decision).includes('1000000001'), false);
+  assert.equal(decision.roomHandle, roomHandle(SECRET, 'private:88880001'));
+  assert.equal(JSON.stringify(decision).includes('88880001'), false);
 
   // 没被打开的那条仍然拒
-  assert.equal(gate({ policy: opened.policy, rawId: 'private:1000000002' }).reason, REASON.PRIVATE_FORBIDDEN);
+  assert.equal(gate({ policy: opened.policy, rawId: 'private:88880002' }).reason, REASON.PRIVATE_FORBIDDEN);
 });
 
 test('频道与未归类标识一律拒绝，且原因可区分', () => {
@@ -67,9 +67,9 @@ test('被关掉的群拒绝，且原因可区分', () => {
 });
 
 test('拒绝也带 auditRef（同一个哈希），便于审计而不写原始 id', () => {
-  const decision = gate({ policy, rawId: 'private:1000000001' });
-  assert.equal(decision.auditRef, roomHandle(SECRET, 'private:1000000001'));
-  assert.equal(JSON.stringify(decision).includes('1000000001'), false);
+  const decision = gate({ policy, rawId: 'private:88880001' });
+  assert.equal(decision.auditRef, roomHandle(SECRET, 'private:88880001'));
+  assert.equal(JSON.stringify(decision).includes('88880001'), false);
 });
 
 test('密钥太短直接拒绝创建闸门', () => {

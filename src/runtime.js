@@ -23,8 +23,7 @@ import { resolveLlmConfig } from './llm-config.mjs';
 
 export const DEFAULT_SECRET = 'qq-digest-local-dev-secret-0123456789';
 
-const BRIDGE_CONFIG_FILE = 'D:/Users/30000/AI/qq-bridge/config.json';
-const BRIDGE_TOKEN_FILE = 'D:/Users/30000/AI/qq-bridge/state/console-token';
+import { resolveBridgePaths } from './bridge-paths.js';
 
 export function resolveDshHome(env = process.env) {
   const fromEnv = env.DSH_HOME;
@@ -43,37 +42,39 @@ export function resolveSecret(env = process.env) {
   return typeof value === 'string' && value.length >= 16 ? value : DEFAULT_SECRET;
 }
 
-export function readBridgeToken(tokenFile = BRIDGE_TOKEN_FILE) {
+export function readBridgeToken(tokenFile) {
+  const resolved = tokenFile || resolveBridgePaths({ env: process.env }).token;
   try {
-    return readFileSync(tokenFile, 'utf8').trim();
+    return readFileSync(resolved, 'utf8').trim();
   } catch {
     return '';
   }
 }
 
-export function readSnowLumaToken(env = process.env) {
+export function readSnowLumaToken(env = process.env, dataDir) {
   if (env.QQ_DIGEST_SNOWLUMA_TOKEN) return env.QQ_DIGEST_SNOWLUMA_TOKEN;
   try {
-    const config = JSON.parse(readFileSync(BRIDGE_CONFIG_FILE, 'utf8'));
+    const config = JSON.parse(readFileSync(resolveBridgePaths({ env, dataDir }).config, 'utf8'));
     return String(config?.snowluma?.accessToken ?? '');
   } catch {
     return '';
   }
 }
 
-export function buildAdapter(source, env = process.env) {
+export function buildAdapter(source, env = process.env, dataDir) {
   const kind = String(source || 'bridge').toLowerCase();
   if (kind === 'snowluma') {
     return createSnowLumaAdapter({
       httpUrl: env.QQ_DIGEST_SNOWLUMA_URL || 'http://127.0.0.1:3000',
-      accessToken: readSnowLumaToken(env),
+      accessToken: readSnowLumaToken(env, dataDir),
     });
   }
   if (kind === 'fixture') return createFixtureAdapter(DEFAULT_FIXTURE);
+  const paths = resolveBridgePaths({ env, dataDir });
   return createBridgeAdapter({
     baseUrl: env.QQ_DIGEST_BRIDGE_URL || 'http://127.0.0.1:3100',
-    tokenFile: env.QQ_DIGEST_BRIDGE_TOKEN_FILE || BRIDGE_TOKEN_FILE,
-    readToken: () => readBridgeToken(env.QQ_DIGEST_BRIDGE_TOKEN_FILE || BRIDGE_TOKEN_FILE),
+    tokenFile: paths.token,
+    readToken: () => readBridgeToken(paths.token),
   });
 }
 
@@ -85,7 +86,7 @@ export function createRuntime(options = {}) {
   const dataDir = options.dataDir ?? resolveDataDir(env);
   const source = options.source ?? env.QQ_DIGEST_SOURCE ?? 'bridge';
 
-  const adapter = buildAdapter(source, env);
+  const adapter = buildAdapter(source, env, dataDir);
   const llm = resolveLlmConfig({ env });
 
   const readConfig = () => loadConfig(configPath(dataDir));

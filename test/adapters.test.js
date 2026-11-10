@@ -28,8 +28,8 @@ test('bridge：群与私聊都上行，类型声明只在群上', async () => {
         body: {
           ok: true,
           items: [
-            { key: 'group:123456789', unread: 0 },
-            { key: 'private:1000000001', unread: 3 },
+            { key: 'group:70001111', unread: 0 },
+            { key: 'private:88880001', unread: 3 },
           ],
         },
       },
@@ -39,9 +39,9 @@ test('bridge：群与私聊都上行，类型声明只在群上', async () => {
   const rooms = await adapter.listRooms();
   assert.equal(rooms.length, 2);
   assert.equal(rooms[0].authoritativeKind, 'group');
-  assert.equal(rooms[0].groupId, '123456789');
+  assert.equal(rooms[0].groupId, '70001111');
   assert.equal(rooms[1].authoritativeKind, undefined);
-  assert.equal(rooms[1].rawId, 'private:1000000001');
+  assert.equal(rooms[1].rawId, 'private:88880001');
 });
 
 test('bridge：fetchMessages 按 fromSeq 过滤并排序', async () => {
@@ -91,12 +91,12 @@ test('normalizeText 去掉控制字符并截断', () => {
 test('snowluma：OneBot 消息段压成纯文本', () => {
   const text = segmentToText([
     { type: 'text', data: { text: '看这个 ' } },
-    { type: 'at', data: { qq: '1000000001' } },
+    { type: 'at', data: { qq: '88880001' } },
     { type: 'image', data: { file: 'x.jpg' } },
     { type: 'mface', data: { summary: '摸鱼' } },
   ]);
   assert.match(text, /看这个/);
-  assert.match(text, /@1000000001/);
+  assert.match(text, /@88880001/);
   assert.match(text, /\[图片\]/);
   assert.match(text, /摸鱼/);
 });
@@ -105,12 +105,12 @@ test('snowluma：群列表补 group: 前缀，裸数字绝不上行', async () =
   const adapter = createSnowLumaAdapter({
     accessToken: 't',
     fetchImpl: fakeFetch({
-      get_group_list: { body: { status: 'ok', retcode: 0, data: [{ group_id: 123456789, group_name: '客户群' }, { group_id: 'bad' }] } },
+      get_group_list: { body: { status: 'ok', retcode: 0, data: [{ group_id: 70001111, group_name: '客户群' }, { group_id: 'bad' }] } },
     }),
   });
   const rooms = await adapter.listRooms();
   assert.equal(rooms.length, 1);
-  assert.equal(rooms[0].rawId, 'group:123456789');
+  assert.equal(rooms[0].rawId, 'group:70001111');
   assert.equal(rooms[0].authoritativeKind, 'group');
   assert.equal(rooms[0].name, '客户群');
   assert.equal(adapter.stateless, true);

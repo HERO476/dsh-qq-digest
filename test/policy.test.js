@@ -8,17 +8,17 @@ test('默认策略：群全开、私聊全关', () => {
   const parsed = parsePolicy(defaultPolicy());
   assert.equal(parsed.ok, true);
   assert.equal(resolveSwitch(parsed.policy, KIND.GROUP, 'group:1').enabled, true);
-  assert.equal(resolveSwitch(parsed.policy, KIND.PRIVATE, 'private:1000000001').enabled, false);
+  assert.equal(resolveSwitch(parsed.policy, KIND.PRIVATE, 'private:88880001').enabled, false);
 });
 
 test('私聊可以逐条打开', () => {
   const parsed = parsePolicy({
     version: 1,
     group: { defaultEnabled: true, overrides: {} },
-    private: { defaultEnabled: false, overrides: { 'private:1000000001': { enabled: true } } },
+    private: { defaultEnabled: false, overrides: { 'private:88880001': { enabled: true } } },
   });
   assert.equal(parsed.ok, true);
-  assert.deepEqual(resolveSwitch(parsed.policy, KIND.PRIVATE, 'private:1000000001'), { enabled: true, source: 'override' });
+  assert.deepEqual(resolveSwitch(parsed.policy, KIND.PRIVATE, 'private:88880001'), { enabled: true, source: 'override' });
   assert.equal(resolveSwitch(parsed.policy, KIND.PRIVATE, 'private:999999').enabled, false);
 });
 

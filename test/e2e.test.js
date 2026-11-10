@@ -37,7 +37,7 @@ test('端到端：群被摘要，私聊与频道被拒，且哨兵不外泄', as
   assert.equal(serialized.includes(SENTINELS.PRIVATE), false);
   assert.equal(serialized.includes(SENTINELS.EXCLUDED), false);
   assert.equal(serialized.includes('private:'), false);
-  assert.equal(serialized.includes('1000000001'), false);
+  assert.equal(serialized.includes('88880001'), false);
 
   const all = service.getDigest();
   assert.equal(all.status, 'OK');
@@ -120,7 +120,7 @@ test('显式打开某条私聊后，它会被摘要（默认态之外的阳性�
     policy: {
       version: 1,
       group: { defaultEnabled: true, overrides: {} },
-      private: { defaultEnabled: false, overrides: { 'private:1000000001': { enabled: true } } },
+      private: { defaultEnabled: false, overrides: { 'private:88880001': { enabled: true } } },
     },
   });
 
@@ -143,9 +143,9 @@ test('私聊起名后，名字会进摘要的 roomTitle', async () => {
     policy: {
       version: 1,
       group: { defaultEnabled: true, overrides: {} },
-      private: { defaultEnabled: false, overrides: { 'private:1000000001': { enabled: true } } },
+      private: { defaultEnabled: false, overrides: { 'private:88880001': { enabled: true } } },
     },
-    titleProvider: (rawId) => (rawId === 'private:1000000001' ? '老婆' : null),
+    titleProvider: (rawId) => (rawId === 'private:88880001' ? '老婆' : null),
   });
 
   const result = await service.runSummary({ trigger: 'manual' });
@@ -165,7 +165,7 @@ test('群起名后同样进 roomTitle；没起名的群保持 null', async () =>
     async listRooms() {
       return [
         { rawId: 'group:100000', authoritativeKind: 'group', name: null },
-        { rawId: 'group:123456789', authoritativeKind: 'group', name: null },
+        { rawId: 'group:70001111', authoritativeKind: 'group', name: null },
       ];
     },
     async fetchMessages({ room }) {

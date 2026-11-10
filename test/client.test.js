@@ -184,12 +184,12 @@ test('草稿转换：只有关掉的群和改过名的群才写进配置', () =>
     groupsEnabled: true,
     rooms: [
       { groupId: '100000', title: '默认开', enabled: true, named: false },
-      { groupId: '123456789', title: '客户群', enabled: true, named: true },
+      { groupId: '70001111', title: '客户群', enabled: true, named: true },
       { groupId: '200000', title: '关掉的群', enabled: false, named: false },
     ],
     privateRooms: [
-      { qq: '1000000001', enabled: true },
-      { qq: '1000000002', enabled: false },
+      { qq: '88880001', enabled: true },
+      { qq: '88880002', enabled: false },
     ],
     summarizer: 'heuristic',
     schedule: { enabled: true, kind: 'daily', time: '08:30', weekdays: ['MO'], timeZone: 'Asia/Shanghai' },
@@ -199,27 +199,27 @@ test('草稿转换：只有关掉的群和改过名的群才写进配置', () =>
   assert.equal(draft.summarizer, 'heuristic');
   assert.equal(draft.schedule.time, '08:30');
   assert.equal(draft.groups['100000'].name, '');
-  assert.equal(draft.groups['123456789'].name, '客户群');
+  assert.equal(draft.groups['70001111'].name, '客户群');
 
   const payload = buildGroupsPayload(draft);
-  assert.deepEqual(Object.keys(payload).sort(), ['123456789', '200000']);
+  assert.deepEqual(Object.keys(payload).sort(), ['200000', '70001111']);
   assert.equal(payload['200000'].enabled, false);
   assert.equal(payload['100000'], undefined, '默认开的群不该产生覆盖项');
 
   assert.equal(draft.groupsEnabled, true);
-  assert.equal(draft.private['1000000001'].enabled, true);
-  assert.equal(draft.private['1000000001'].name, '');
-  assert.equal(draft.private['1000000002'].enabled, false);
+  assert.equal(draft.private['88880001'].enabled, true);
+  assert.equal(draft.private['88880001'].name, '');
+  assert.equal(draft.private['88880002'].enabled, false);
 
   const priv = buildPrivatePayload(draft);
-  assert.deepEqual(priv['1000000001'], { enabled: true });
-  assert.deepEqual(priv['1000000002'], { enabled: false }, '关掉的私聊也要显式写 false，否则旧配置还留着 true');
+  assert.deepEqual(priv['88880001'], { enabled: true });
+  assert.deepEqual(priv['88880002'], { enabled: false }, '关掉的私聊也要显式写 false，否则旧配置还留着 true');
 
   // 私聊起名：名字要跟着带上，没名字就不写空串
-  draft.private['1000000001'].name = '  老婆  ';
+  draft.private['88880001'].name = '  老婆  ';
   const named = buildPrivatePayload(draft);
-  assert.deepEqual(named['1000000001'], { enabled: true, name: '老婆' }, '名字要 trim 后写入');
-  assert.deepEqual(named['1000000002'], { enabled: false }, '空名字不落盘');
+  assert.deepEqual(named['88880001'], { enabled: true, name: '老婆' }, '名字要 trim 后写入');
+  assert.deepEqual(named['88880002'], { enabled: false }, '空名字不落盘');
 });
 
 test('重名检测：群和私聊合并判定，忽略大小写与首尾空格', () => {

@@ -108,7 +108,7 @@ check('关掉的群在列表里标记为关闭', closed?.enabled === false, JSON
 const privateAttempt = await request(captured.handler, {
   method: 'POST',
   url: '/qq-digest-api/config',
-  body: { groups: { '1000000001-private': { enabled: true }, 'private:1000000001': { enabled: true } } },
+  body: { groups: { '88880001-private': { enabled: true }, 'private:88880001': { enabled: true } } },
 });
 check('私聊 id 被拒（400）', privateAttempt.status === 400, `${privateAttempt.status} ${JSON.stringify(privateAttempt.json)}`);
 
@@ -122,7 +122,7 @@ check('非法时间被拒（400）', badTime.status === 400, `${badTime.status} 
 const privSave = await request(captured.handler, {
   method: 'POST',
   url: '/qq-digest-api/config',
-  body: { groupsEnabled: false, groups: {}, private: { '1000000001': { enabled: true, name: '测试私聊' } }, summarizer: 'heuristic', schedule: { enabled: false, kind: 'daily', time: '09:00', weekdays: ['MO'], timeZone: 'Asia/Shanghai' } },
+  body: { groupsEnabled: false, groups: {}, private: { '88880001': { enabled: true, name: '测试私聊' } }, summarizer: 'heuristic', schedule: { enabled: false, kind: 'daily', time: '09:00', weekdays: ['MO'], timeZone: 'Asia/Shanghai' } },
 });
 check('可以逐条打开私聊', privSave.status === 200, privSave.status);
 check('总开关可以关掉', privSave.json.state?.groupsEnabled === false, privSave.json.state?.groupsEnabled);
@@ -136,14 +136,14 @@ check('总开关关掉后所有群都被拒（单群覆盖也失效）', blocked
 const restore = await request(captured.handler, {
   method: 'POST',
   url: '/qq-digest-api/config',
-  body: { groupsEnabled: true, groups: {}, private: { '1000000001': { enabled: false } }, summarizer: 'heuristic', schedule: { enabled: false, kind: 'daily', time: '09:00', weekdays: ['MO'], timeZone: 'Asia/Shanghai' } },
+  body: { groupsEnabled: true, groups: {}, private: { '88880001': { enabled: false } }, summarizer: 'heuristic', schedule: { enabled: false, kind: 'daily', time: '09:00', weekdays: ['MO'], timeZone: 'Asia/Shanghai' } },
 });
 check('可以再恢复默认', restore.status === 200 && restore.json.state?.groupsEnabled === true, restore.status);
 
 const run = await request(captured.handler, { method: 'POST', url: '/qq-digest-api/run', body: {} });
 check('POST /run 返回结果', run.status === 200 && typeof run.json.result?.status === 'string', JSON.stringify(run.json.result?.status));
 
-const digest = await request(captured.handler, { url: '/qq-digest-api/digest?group=123456789' });
+const digest = await request(captured.handler, { url: '/qq-digest-api/digest?group=70001111' });
 check('GET /digest 只认群号', digest.status === 200 || digest.json.digest === null, digest.status);
 
 const privateDigest = await request(captured.handler, { url: '/qq-digest-api/digest?group=private%3A1' });
@@ -164,14 +164,14 @@ check('未知路径 404', notFound.status === 404, notFound.status);
 const dupSave = await request(captured.handler, {
   method: 'POST',
   url: '/qq-digest-api/config',
-  body: { groupsEnabled: true, groups: { '100000': { enabled: true, name: '重名' } }, private: { '1000000001': { enabled: false, name: '重名' } }, summarizer: 'heuristic', schedule: { enabled: false, kind: 'daily', time: '09:00', weekdays: ['MO'], timeZone: 'Asia/Shanghai' } },
+  body: { groupsEnabled: true, groups: { '100000': { enabled: true, name: '重名' } }, private: { '88880001': { enabled: false, name: '重名' } }, summarizer: 'heuristic', schedule: { enabled: false, kind: 'daily', time: '09:00', weekdays: ['MO'], timeZone: 'Asia/Shanghai' } },
 });
 check('群与私聊同名 → 400', dupSave.status === 400 && String(dupSave.json.error ?? '').includes('DUPLICATE_NAME'), `${dupSave.status} ${JSON.stringify(dupSave.json)}`);
 
 const uniqueSave = await request(captured.handler, {
   method: 'POST',
   url: '/qq-digest-api/config',
-  body: { groupsEnabled: true, groups: { '100000': { enabled: true, name: '甲' } }, private: { '1000000001': { enabled: false, name: '乙' } }, summarizer: 'heuristic', schedule: { enabled: false, kind: 'daily', time: '09:00', weekdays: ['MO'], timeZone: 'Asia/Shanghai' } },
+  body: { groupsEnabled: true, groups: { '100000': { enabled: true, name: '甲' } }, private: { '88880001': { enabled: false, name: '乙' } }, summarizer: 'heuristic', schedule: { enabled: false, kind: 'daily', time: '09:00', weekdays: ['MO'], timeZone: 'Asia/Shanghai' } },
 });
 check('名字互不相同 → 200', uniqueSave.status === 200, uniqueSave.status);
 

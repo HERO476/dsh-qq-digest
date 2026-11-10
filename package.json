@@ -1,18 +1,39 @@
 {
   "name": "dsh-qq-digest",
-  "version": "0.2.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "只读的 DSH QQ 摘要插件：群聊默认全开、私聊默认全关且只能逐条打开；MCP 四个只读工具 + 设置页（选群/起名/定时/立即总结），零发送能力",
   "type": "module",
-  "description": "只读的 QQ 群聊摘要插件：设置页里选群、定时跑、产出重点活动与待办；私聊在结构上不可读，零发送能力",
+  "license": "MIT",
+  "author": "huangpeiyan",
+  "homepage": "https://github.com/HERO476/dsh-qq-digest#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HERO476/dsh-qq-digest.git"
+  },
+  "bugs": {
+    "url": "https://github.com/HERO476/dsh-qq-digest/issues"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "qq",
+    "digest",
+    "summary",
+    "群聊",
+    "摘要",
+    "cordis",
+    "mcp"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
-  },
-  "engines": {
-    "node": ">=20"
   },
   "dsh": {
     "bundle": {
@@ -32,13 +53,18 @@
     "src",
     "install",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "test": "node --test",
     "check": "node scripts/check-core-purity.mjs",
     "verify": "node scripts/check-core-purity.mjs && node --test",
     "smoke": "node scripts/smoke.mjs",
+    "check:all": "node scripts/check-all.mjs",
     "install:profile": "node scripts/install.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

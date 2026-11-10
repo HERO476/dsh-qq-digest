@@ -53,14 +53,14 @@
 
 ## 配置
 
-`<DSH_HOME>/qq-digest/config.json`（默认 `C:\Users\30000\.dsh\qq-digest\config.json`）。
+`<DSH_HOME>/qq-digest/config.json`（默认 `<DSH_HOME>/qq-digest/config.json`）。
 **每次工具调用都重读**，改完立即生效，不用重启。
 
 ```json
 {
   "version": 1,
   "groups": {
-    "group:123456789": { "enabled": true, "name": "客户对接群" }
+    "group:70001111": { "enabled": true, "name": "客户对接群" }
   },
   "summarizer": "llm",
   "schedule": { "enabled": true, "kind": "weekly", "weekdays": ["MO","TU","WE","TH","FR"], "time": "09:00", "timeZone": "Asia/Shanghai" }
@@ -106,7 +106,7 @@ core 纯净性检查锁定：`src/core/` 不许 import `node:fs` / 子进程 / �
 
 **名字不能重复**：群和私聊**合并判定**（`trim` + 忽略大小写），空名字不参与。
 面板会实时把重复的两个输入框标红并提示「重名」；真正拦下来的是宿主，
-返回 `DUPLICATE_NAME：「X」同时被群 100000 和私聊 1000000001 使用`，整份配置不落盘。
+返回 `DUPLICATE_NAME：「X」同时被群 100000 和私聊 88880001 使用`，整份配置不落盘。
 
 ### 定时是怎么跑的
 

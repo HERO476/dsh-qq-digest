@@ -12,8 +12,8 @@
  */
 
 import { spawn } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,6 +22,9 @@ const source = process.argv[2] || 'fixture';
 const summarizer = process.argv[3] || 'heuristic';
 
 const dataDir = mkdtempSync(join(tmpdir(), 'qq-digest-smoke-'));
+// 把本机记录的 qq-bridge 位置带进临时数据目录，否则 bridge 源会退回 ~/AI/qq-bridge 而找不到令牌
+const realBridgeRoot = join(process.env.DSH_HOME?.trim() || join(homedir(), '.dsh'), 'qq-digest', 'bridge-root.txt');
+if (existsSync(realBridgeRoot)) writeFileSync(join(dataDir, 'bridge-root.txt'), readFileSync(realBridgeRoot, 'utf8'), 'utf8');
 writeFileSync(
   join(dataDir, 'config.json'),
   `${JSON.stringify(
