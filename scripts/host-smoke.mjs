@@ -98,6 +98,7 @@ check('只暴露群', (state.json.rooms ?? []).every((room) => /^\d+$/.test(Stri
 check('fixture 下应看到 2 个群', (state.json.rooms ?? []).length === 2, (state.json.rooms ?? []).length);
 check('默认群聊总开关是开的', state.json.groupsEnabled === true, state.json.groupsEnabled);
 check('私聊单独成列且默认全关', Array.isArray(state.json.privateRooms) && state.json.privateRooms.length === 1 && state.json.privateRooms[0].enabled === false, JSON.stringify(state.json.privateRooms));
+check('状态带 digestCount / visibleDigestCount（孤儿摘要要看得出来）', typeof state.json.digestCount === 'number' && typeof state.json.visibleDigestCount === 'number', `${state.json.digestCount}/${state.json.visibleDigestCount}`);
 
 const saved = await request(captured.handler, {
   method: 'POST',
