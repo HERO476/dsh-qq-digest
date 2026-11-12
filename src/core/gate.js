@@ -43,6 +43,16 @@ export function auditRefFor(secret, canonicalId) {
   return createHmac('sha256', secret).update(`audit:${canonicalId}`).digest('hex').slice(0, 16);
 }
 
+/**
+ * 设置页引用：让 UI 能安全地指代一个会话，而不把群号/QQ 号放进响应体。
+ *
+ * 与 roomHandle 的区别：roomHandle 是「读取凭据」，uiRef 只能用来在保存配置时
+ * 让服务端反查出是哪个会话（服务端重新枚举数据源重算），单独拿到它读不了摘要。
+ */
+export function uiRef(secret, canonicalId) {
+  return createHmac('sha256', secret).update(`ui:${canonicalId}`).digest('hex').slice(0, 12);
+}
+
 export function createGate({ secret }) {
   if (typeof secret !== 'string' || secret.length < 16) {
     throw new Error('GATE_SECRET_TOO_SHORT');

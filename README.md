@@ -93,6 +93,8 @@ node scripts/smoke.mjs              # fixture 端到端（真实子进程走 MCP
 node scripts/smoke.mjs bridge       # 真桥接只读冒烟
 node scripts/host-smoke.mjs         # 宿主半：假 ctx 跑 apply()，真 req/res 打路由（含跨站/伪造 Host 用例）
 node scripts/final-check.mjs        # 发布前自检（脱敏词从 QQ_DIGEST_SENSITIVE_PATTERNS 读，不写死在仓库里）
+node scripts/prune-orphans.mjs      # 预览：清掉句柄对不上任何现存会话的「孤儿摘要」
+node scripts/prune-orphans.mjs --apply  # 真正清理（自动备份）
 ```
 
 core 纯净性检查锁定：`src/core/` 不许 import `node:fs` / 子进程 / 网络，不许出现 `fetch(`、`send_*`、`/api/send`、写文件符号。
@@ -252,6 +254,9 @@ node scripts/verify-dsh.mjs      # 宿主半在线？客户端半上次启动有
   跨进程互斥用 `run.lock`（带心跳续租，长轮次不会被判成陈旧锁抢占）。
 - 手动「立即总结」**不会**吞掉当天的定时：去重只认 `lastTrigger === "scheduled"` 的那一次。
 - 未评估 QQ 侧 ToS 与账号风险；本插件只读本地桥接/网关接口，不额外登录。
-- **`/state` 会明文回显群号与私聊 QQ 号**：设置页要靠它们做开关和提交，不做掩码是刻意选择
-  （入口已经用来源校验收窄到回环同源）。因此别在截图、录屏、远程协助里展示设置页。
-- 未做速率限制：`/run` 与 `run_summary` 可以被反复触发，会放大 LLM 调用费用。需要限流请在外层加。
+- **`/state` 不再下发原始群号/QQ 号**：只给 `ref`（12 位 HMAC，设置页提交配置时用来反查会话）和
+  `groupIdMasked` / `qqMasked`（例如 `700****111`）。服务端保存时重新枚举数据源反查 ref，不落任何映射表；
+  兼容旧行为：直接送原始 id 或 `group:<数字>` 仍然接受（脚本用）。
+- **手动触发有 60 秒最短间隔**（`QQ_DIGEST_MIN_RUN_INTERVAL_MS`，0 表示关闭），超限返回 `RATE_LIMITED`。
+  定时触发不受限 —— 它本身已有每日去重，再限流会让到点那次被吞掉。
+- 限流只覆盖「手动触发」的 60 秒最短间隔；跨天的总量配额仍未做。

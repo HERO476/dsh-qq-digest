@@ -44,7 +44,7 @@ process.stderr.write(
 // run_summary 走跨进程锁；拿不到锁如实返回 ALREADY_RUNNING，而不是重复跑一轮。
 const service = {
   ...runtime.service,
-  runSummary: (request) => withRunLock(runtime.dataDir, () => runtime.service.runSummary(request)),
+  runSummary: (request) => withRunLock(runtime.dataDir, () => runtime.service.runSummary(request), { trigger: 'manual' }),
 };
 
 const handlers = createToolHandlers(service);

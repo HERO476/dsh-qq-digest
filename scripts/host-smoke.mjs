@@ -15,6 +15,8 @@ import { Readable } from 'node:stream';
 const dataDir = mkdtempSync(join(tmpdir(), 'qq-digest-host-'));
 process.env.QQ_DIGEST_DATA_DIR = dataDir;
 process.env.QQ_DIGEST_SOURCE = process.env.QQ_DIGEST_SOURCE || 'fixture';
+// 冒烟会连续触发多轮：关掉手动限流，否则后面的用例会被 RATE_LIMITED 掉
+process.env.QQ_DIGEST_MIN_RUN_INTERVAL_MS = '0';
 
 const { apply } = await import('../lib/index.js');
 
@@ -94,7 +96,14 @@ function check(name, condition, detail) {
 const state = await request(captured.handler, { url: '/qq-digest-api/state' });
 check('GET /state 返回 200', state.status === 200, state.status);
 check('状态里有 groups 数组', Array.isArray(state.json.rooms), typeof state.json.rooms);
-check('只暴露群', (state.json.rooms ?? []).every((room) => /^\d+$/.test(String(room.groupId))), JSON.stringify(state.json.rooms?.slice(0, 2)));
+check(
+  '只给 ref + 掩码，响应体里没有原始群号',
+  (state.json.rooms ?? []).every(
+    (room) => typeof room.ref === 'string' && /^[0-9a-f]{12}$/.test(room.ref)
+      && typeof room.groupIdMasked === 'string' && !('groupId' in room) && !('canonicalId' in room),
+  ),
+  JSON.stringify(state.json.rooms?.[0]),
+);
 check('fixture 下应看到 2 个群', (state.json.rooms ?? []).length === 2, (state.json.rooms ?? []).length);
 check('默认群聊总开关是开的', state.json.groupsEnabled === true, state.json.groupsEnabled);
 check('私聊单独成列且默认全关', Array.isArray(state.json.privateRooms) && state.json.privateRooms.length === 1 && state.json.privateRooms[0].enabled === false, JSON.stringify(state.json.privateRooms));
@@ -110,8 +119,23 @@ check('关掉的群出现在配置里', saved.json.config?.groups?.['group:10000
 check('定时时间被保存', saved.json.config?.schedule?.time === '09:30', saved.json.config?.schedule?.time);
 
 const afterSave = await request(captured.handler, { url: '/qq-digest-api/state' });
-const closed = (afterSave.json.rooms ?? []).find((room) => room.groupId === '100000');
+const closed = (afterSave.json.rooms ?? []).find((room) => room.title === '产品研发群');
 check('关掉的群在列表里标记为关闭', closed?.enabled === false, JSON.stringify(closed));
+
+// 设置页拿到的只有 ref：必须能用它提交配置
+const groupRef = (state.json.rooms ?? []).find((room) => String(room.title ?? '').includes('产品研发'))?.ref
+  ?? (state.json.rooms ?? [])[0]?.ref;
+const saveByRef = await request(captured.handler, {
+  method: 'POST',
+  url: '/qq-digest-api/config',
+  body: { groups: { [groupRef]: { enabled: false, name: '用ref改名' } }, summarizer: 'heuristic', schedule: { enabled: false, kind: 'daily', time: '09:00', weekdays: ['MO'], timeZone: 'Asia/Shanghai' } },
+});
+check('可以用 ref 保存配置（设置页契约）', saveByRef.status === 200, `${saveByRef.status} ${JSON.stringify(saveByRef.json.error ?? '')}`);
+// 注意：数据源自带群名时 title 以数据源为准（room.name ?? entry.name），
+// 所以这里断言的是「开关与命名都落到了配置里」，而不是 title 变成新名字。
+const savedRoom = (saveByRef.json.state?.rooms ?? []).find((room) => room.ref === groupRef);
+check('ref 保存后开关生效', savedRoom?.enabled === false, JSON.stringify(savedRoom));
+check('ref 保存后命名已记录', savedRoom?.named === true, JSON.stringify(savedRoom));
 
 const privateAttempt = await request(captured.handler, {
   method: 'POST',

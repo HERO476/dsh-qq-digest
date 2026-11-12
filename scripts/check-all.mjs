@@ -81,10 +81,10 @@ if (base === null) {
   if (Array.isArray(state.privateRooms)) {
     ok('状态含私聊列表', `${state.privateRooms.length} 条，打开 ${state.privateRooms.filter((r) => r.enabled).length} 条`);
     const named = state.privateRooms.filter((r) => r.named);
-    info('已命名的私聊', named.length ? named.map((r) => `${r.qq}→${r.name}`).join(', ') : '(无)');
+    info('已命名的私聊', named.length ? named.map((r) => `${r.qqMasked ?? r.qq}→${r.name}`).join(', ') : '(无)');
   } else bad('状态缺 privateRooms —— 宿主半还是旧版本');
 
-  info('群列表', (state.rooms ?? []).map((r) => `${r.title ?? r.groupId}${r.enabled ? '' : '(关)'}`).join(' / ') || '(空)');
+  info('群列表', (state.rooms ?? []).map((r) => `${r.title ?? r.groupIdMasked ?? r.ref}${r.enabled ? '' : '(关)'}`).join(' / ') || '(空)');
   info('摘要器', state.summarizer);
   info('定时', JSON.stringify(state.schedule));
   info('客户端心跳', JSON.stringify(state.clientBoot ?? null));

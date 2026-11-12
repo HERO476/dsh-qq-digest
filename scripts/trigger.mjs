@@ -59,9 +59,9 @@ for (const item of result.errors ?? []) {
 const state = await (await fetch(`${base}/qq-digest-api/state`, { headers: { accept: 'application/json' } })).json();
 for (const room of state.rooms ?? []) {
   if (!room.hasDigest) continue;
-  const digest = await (await fetch(`${base}/qq-digest-api/digest?group=${room.groupId}`, { headers: { accept: 'application/json' } })).json();
+  const digest = await (await fetch(`${base}/qq-digest-api/digest?ref=${room.ref}`, { headers: { accept: 'application/json' } })).json();
   const d = digest.digest ?? {};
-  console.log(`\n[${room.title ?? room.groupId}] ${room.lastDigestAt}`);
+  console.log(`\n[${room.title ?? room.ref}] ${room.lastDigestAt}`);
   console.log(`  ${d.overview ?? '(无概述)'}`);
   (d.tasks ?? []).slice(0, 3).forEach((task) => console.log(`  · 待办：${task.what}${task.owner && task.owner !== '未指定' ? `（${task.owner}）` : ''}`));
 }

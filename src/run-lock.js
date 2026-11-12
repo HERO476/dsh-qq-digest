@@ -19,6 +19,8 @@ const DEFAULT_LEASE_MS = 10 * 60_000;
  * 表现为重复摘要与水位线互相覆盖 —— 也就是锁存在的唯一理由失效。
  */
 const DEFAULT_HEARTBEAT_MS = 60_000;
+/** 手动触发的最短间隔（毫秒）。可用 QQ_DIGEST_MIN_RUN_INTERVAL_MS 覆盖，0 表示关闭。 */
+const DEFAULT_MIN_INTERVAL_MS = 60_000;
 
 export function lockPath(dir) {
   return join(dir, 'run.lock');
@@ -109,11 +111,49 @@ export function acquireRunLock(dir, options = {}) {
 
 /** 拿锁跑一段工作；拿不到就返回 ALREADY_RUNNING，不排队。 */
 export async function withRunLock(dir, fn, options = {}) {
+  const {
+    trigger = 'manual',
+    // 手动触发的最短间隔：防止连点「立即总结」或反复调 run_summary 把 LLM 费用放大。
+    // 定时触发不受限（它本身已有每日去重，再限流会让「到点那次」被吞掉）。
+    minIntervalMs = Number(process.env.QQ_DIGEST_MIN_RUN_INTERVAL_MS ?? DEFAULT_MIN_INTERVAL_MS),
+    now = () => Date.now(),
+  } = options;
+
+  if (trigger === 'manual' && Number.isFinite(minIntervalMs) && minIntervalMs > 0) {
+    const last = Number(readRate(dir).lastManualAt ?? 0);
+    const elapsed = now() - last;
+    if (last > 0 && elapsed >= 0 && elapsed < minIntervalMs) {
+      return { status: 'RATE_LIMITED', retryAfterMs: Math.round(minIntervalMs - elapsed) };
+    }
+  }
+
   const lease = acquireRunLock(dir, options);
   if (!lease.ok) return { status: 'ALREADY_RUNNING', holder: lease.holder, ageMs: lease.ageMs };
+
+  // 记录点在「开始」而不是「结束」：一轮可能跑几分钟，从开始算才是真正的调用频率。
+  if (trigger === 'manual') writeRate(dir, { lastManualAt: now() });
+
   try {
     return await fn();
   } finally {
     lease.release();
+  }
+}
+
+const RATE_FILE = 'rate.json';
+
+function readRate(dir) {
+  try {
+    return JSON.parse(readFileSync(join(dir, RATE_FILE), 'utf8')) ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function writeRate(dir, payload) {
+  try {
+    writeFileSync(join(dir, RATE_FILE), `${JSON.stringify(payload)}\n`, 'utf8');
+  } catch {
+    // 速率状态写不进去不该让整轮失败：最多是限流失效
   }
 }

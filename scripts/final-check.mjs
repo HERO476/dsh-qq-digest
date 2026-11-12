@@ -123,17 +123,65 @@ try {
 }
 
 // ── 5. GitHub ───────────────────────────────────────────────────────────
-const lsRemote = run('git', ['ls-remote', 'origin'], {
-  env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
-  timeout: 20000,
-});
-if (lsRemote.ok && lsRemote.out !== '') {
-  const heads = lsRemote.out.split('\n').filter((line) => line.includes('refs/heads/'));
-  ok('GitHub 仓库可达', heads.length ? heads.map((h) => h.split('refs/heads/')[1]).join(',') : '(空仓库)');
-} else if (lsRemote.ok) {
-  info('GitHub 仓库', '存在但为空，可以直接 push');
-} else {
-  bad('GitHub 仓库不可达', lsRemote.err.split('\n').slice(0, 2).join(' '));
+// 优先走 api.github.com：本机 github.com:443 的 git 端点会被间歇拦断，
+// 直接判定「不可达」会把网络抖动说成仓库问题（实测过多次假红）。
+// 只有 API 也不通时，才退回 git ls-remote。
+const repoSlug = (() => {
+  const remote = run('git', ['remote', 'get-url', 'origin']);
+  const text = remote.ok ? remote.out.trim() : '';
+  const match = text.match(/github\.com[/:]([^/]+)\/([^/]+?)(?:\.git)?$/);
+  return match ? `${match[1]}/${match[2]}` : null;
+})();
+
+let githubChecked = false;
+if (repoSlug) {
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repoSlug}`, {
+      headers: { accept: 'application/vnd.github+json', 'user-agent': 'dsh-qq-digest-final-check' },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (res.status === 200) {
+      const meta = await res.json();
+      githubChecked = true;
+      const localHead = (run('git', ['rev-parse', 'HEAD']).out ?? '').trim();
+      const remoteRes = await fetch(`https://api.github.com/repos/${repoSlug}/commits/${meta.default_branch}`, {
+        headers: { accept: 'application/vnd.github+json', 'user-agent': 'dsh-qq-digest-final-check' },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (remoteRes.status === 200) {
+        const head = await remoteRes.json();
+        const sha = String(head.sha ?? '');
+        ok('GitHub 仓库可达', `${repoSlug} ${meta.visibility} ${meta.default_branch}@${sha.slice(0, 7)}`);
+        if (localHead !== '' && sha !== '' && localHead !== sha) {
+          info('远端与本地不一致', `本地 ${localHead.slice(0, 7)} / 远端 ${sha.slice(0, 7)} —— 需要 push`);
+        } else if (localHead !== '') {
+          ok('远端与本地一致', localHead.slice(0, 7));
+        }
+      } else {
+        info('GitHub 分支', `${meta.default_branch} 为空（可直接 push）`);
+      }
+    } else if (res.status === 404) {
+      githubChecked = true;
+      bad('GitHub 仓库不存在或无权访问', repoSlug);
+    }
+  } catch {
+    // 落到下面的 ls-remote 兜底
+  }
+}
+
+if (!githubChecked) {
+  const lsRemote = run('git', ['ls-remote', 'origin'], {
+    env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    timeout: 20000,
+  });
+  if (lsRemote.ok && lsRemote.out !== '') {
+    const heads = lsRemote.out.split('\n').filter((line) => line.includes('refs/heads/'));
+    ok('GitHub 仓库可达（git 通道）', heads.length ? heads.map((h) => h.split('refs/heads/')[1]).join(',') : '(空仓库)');
+  } else if (lsRemote.ok) {
+    info('GitHub 仓库', '存在但为空，可以直接 push');
+  } else {
+    bad('GitHub 仓库不可达（API 与 git 均失败）', `${(lsRemote.err ?? '').split('\n').slice(0, 1).join(' ')}`);
+  }
 }
 
 /**
